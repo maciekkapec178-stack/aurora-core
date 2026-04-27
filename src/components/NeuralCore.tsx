@@ -1,184 +1,293 @@
 import { useEffect, useRef } from "react";
-import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
-import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
-import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 
 const NeuralCore = () => {
-  const mountRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    const mount = mountRef.current;
-    if (!mount) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
-    const width = mount.clientWidth || window.innerWidth;
-    const height = mount.clientHeight || window.innerHeight;
+    const W = 800;
+    const H = 500;
+    canvas.width = W;
+    canvas.height = H;
+    const cx = W / 2;
+    const cy = H / 2;
 
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(65, width / height, 0.1, 100);
-    camera.position.set(0, 0, 4);
+    const rand = (a: number, b: number) => Math.random() * (b - a) + a;
+    const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setClearColor(0x000000, 1);
-    mount.appendChild(renderer.domElement);
+    type Particle = {
+      r: number;
+      angle: number;
+      speed: number;
+      size: number;
+      wobble: number;
+      wobbleSpeed: number;
+      wobbleAmp: number;
+      alpha: number;
+      color: string;
+      x?: number;
+      y?: number;
+      currentAlpha?: number;
+    };
+    type Tendril = {
+      angle: number;
+      length: number;
+      segments: { drift: number; phase: number }[];
+      width: number;
+      phase: number;
+    };
+    type Spark = {
+      x: number;
+      y: number;
+      tx: number;
+      ty: number;
+      life: number;
+      speed: number;
+    };
 
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
+    const particles: Particle[] = [];
+    const tendrils: Tendril[] = [];
+    const sparks: Spark[] = [];
+    let t = 0;
 
-    // ---------------- CORE SPHERE ----------------
-    const sphereGeo = new THREE.SphereGeometry(1, 256, 256);
-    const sphereMat = new THREE.ShaderMaterial({
-      uniforms: { time: { value: 0 } },
-      vertexShader: `
-        varying vec3 vNormal;
-        uniform float time;
-        void main() {
-          vNormal = normal;
-          float n = sin(position.y*6.0 + time*2.0)*0.04;
-          vec3 pos = position + normal * n;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(pos,1.0);
+    for (let i = 0; i < 700; i++) {
+      particles.push({
+        r: rand(40, 195),
+        angle: rand(0, Math.PI * 2),
+        speed: rand(0.001, 0.006),
+        size: rand(0.3, 1.6),
+        wobble: rand(0, Math.PI * 2),
+        wobbleSpeed: rand(0.01, 0.05),
+        wobbleAmp: rand(5, 18),
+        alpha: rand(0.4, 1),
+        color:
+          Math.random() < 0.65
+            ? `hsla(${rand(275, 330)},100%,72%,`
+            : `hsla(${rand(195, 245)},100%,72%,`,
+      });
+    }
+
+    for (let i = 0; i < 16; i++) {
+      const angle = (i / 16) * Math.PI * 2 + rand(-0.08, 0.08);
+      tendrils.push({
+        angle,
+        length: rand(200, 290),
+        segments: Array.from({ length: 14 }, () => ({
+          drift: rand(-20, 20),
+          phase: rand(0, Math.PI * 2),
+        })),
+        width: rand(1.2, 3.2),
+        phase: rand(0, Math.PI * 2),
+      });
+    }
+
+    function drawBrainLobe() {
+      for (let pass = 0; pass < 3; pass++) {
+        const alpha = [0.05, 0.1, 0.18][pass];
+        const scale = [1.09, 1.04, 1][pass];
+        const lobes = 18;
+        ctx!.beginPath();
+        for (let i = 0; i <= lobes * 5; i++) {
+          const a = (i / lobes / 5) * Math.PI * 2;
+          const lobe =
+            1 +
+            0.11 * Math.sin(lobes * a + t * 0.28) +
+            0.055 * Math.sin(lobes * 2 * a - t * 0.18);
+          const r = 188 * scale * lobe;
+          const x = cx + Math.cos(a) * r;
+          const y = cy + Math.sin(a) * r;
+          i === 0 ? ctx!.moveTo(x, y) : ctx!.lineTo(x, y);
         }
-      `,
-      fragmentShader: `
-        varying vec3 vNormal;
-        void main(){
-          float fresnel = pow(1.0 - dot(vNormal, vec3(0.0,0.0,1.0)), 3.0);
-          vec3 col = mix(vec3(0.4,0.0,1.0), vec3(1.0,0.2,0.8), fresnel);
-          gl_FragColor = vec4(col,1.0);
-        }
-      `,
-      blending: THREE.AdditiveBlending,
-      transparent: true,
-    });
-    const sphere = new THREE.Mesh(sphereGeo, sphereMat);
-    scene.add(sphere);
+        ctx!.closePath();
+        const g = ctx!.createRadialGradient(cx, cy, 20, cx, cy, 210);
+        g.addColorStop(0, `rgba(180,90,255,${alpha})`);
+        g.addColorStop(0.5, `rgba(110,50,210,${alpha})`);
+        g.addColorStop(1, `rgba(50,15,130,${alpha * 0.3})`);
+        ctx!.fillStyle = g;
+        ctx!.fill();
+        ctx!.strokeStyle = `rgba(155,70,255,${alpha * 1.6})`;
+        ctx!.lineWidth = pass === 2 ? 1.1 : 0.5;
+        ctx!.stroke();
+      }
+    }
 
-    // ---------------- NEURAL LINES ----------------
-    const lineMaterial = new THREE.ShaderMaterial({
-      uniforms: { time: { value: 0 } },
-      vertexShader: `
-        varying float vT;
-        void main() {
-          vT = position.y;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
+    function drawTendrils() {
+      tendrils.forEach((td) => {
+        const pts: [number, number][] = [];
+        for (let i = 0; i < td.segments.length; i++) {
+          const prog = i / (td.segments.length - 1);
+          const r = prog * td.length;
+          const wave =
+            td.segments[i].drift *
+            Math.sin(t * 0.75 + td.phase + td.segments[i].phase);
+          const perp = td.angle + Math.PI / 2;
+          pts.push([
+            cx + Math.cos(td.angle) * r + Math.cos(perp) * wave,
+            cy + Math.sin(td.angle) * r + Math.sin(perp) * wave,
+          ]);
         }
-      `,
-      fragmentShader: `
-        varying float vT;
-        uniform float time;
-        void main(){
-          float flow = sin(vT*10.0 - time*5.0)*0.5+0.5;
-          vec3 col = mix(vec3(0.2,0.6,1.0), vec3(1.0,0.2,0.8), flow);
-          gl_FragColor = vec4(col,1.0);
+        ctx!.beginPath();
+        ctx!.moveTo(pts[0][0], pts[0][1]);
+        for (let i = 1; i < pts.length - 1; i++) {
+          const mx = (pts[i][0] + pts[i + 1][0]) / 2;
+          const my = (pts[i][1] + pts[i + 1][1]) / 2;
+          ctx!.quadraticCurveTo(pts[i][0], pts[i][1], mx, my);
         }
-      `,
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-    });
-
-    const lines: THREE.Line[] = [];
-    const createNeuronLine = () => {
-      const points: THREE.Vector3[] = [];
-      for (let i = 0; i < 50; i++) {
-        const t = i / 50;
-        const r = 1 + Math.sin(t * 3.14) * 0.2;
-        points.push(
-          new THREE.Vector3(
-            Math.sin(t * 6.28) * r,
-            (t - 0.5) * 2,
-            Math.cos(t * 6.28) * r
-          )
+        const fade = 0.45 + 0.3 * Math.sin(t * 1.1 + td.phase);
+        const g = ctx!.createLinearGradient(
+          cx,
+          cy,
+          pts[pts.length - 1][0],
+          pts[pts.length - 1][1]
         );
+        g.addColorStop(0, `rgba(90,170,255,${fade})`);
+        g.addColorStop(0.5, `rgba(70,130,255,${fade * 0.55})`);
+        g.addColorStop(1, "rgba(50,90,210,0)");
+        ctx!.strokeStyle = g;
+        ctx!.lineWidth = td.width;
+        ctx!.stroke();
+      });
+    }
+
+    function drawVeins() {
+      for (let v = 0; v < 8; v++) {
+        const a = (v / 8) * Math.PI * 2 + t * 0.045;
+        ctx!.beginPath();
+        ctx!.moveTo(cx, cy);
+        for (let i = 1; i <= 9; i++) {
+          const r = i * 21;
+          const wa = a + Math.sin(t * 0.45 + v + i * 0.45) * 0.28;
+          ctx!.lineTo(cx + Math.cos(wa) * r, cy + Math.sin(wa) * r);
+        }
+        const pulse = 0.35 + 0.28 * Math.sin(t * 2 + v);
+        ctx!.strokeStyle = `rgba(90,190,255,${pulse})`;
+        ctx!.lineWidth = 1.4;
+        ctx!.stroke();
       }
-      const geo = new THREE.BufferGeometry().setFromPoints(points);
-      return new THREE.Line(geo, lineMaterial);
-    };
-    for (let i = 0; i < 40; i++) {
-      const line = createNeuronLine();
-      line.rotation.y = Math.random() * Math.PI;
-      scene.add(line);
-      lines.push(line);
     }
 
-    // ---------------- PARTICLES ----------------
-    const pGeo = new THREE.BufferGeometry();
-    const count = 4000;
-    const pos = new Float32Array(count * 3);
-    for (let i = 0; i < count * 3; i++) {
-      pos[i] = (Math.random() - 0.5) * 5;
+    function drawCore() {
+      for (let ring = 5; ring > 0; ring--) {
+        const r = ring * 13 + 4 * Math.sin(t * 3 + ring);
+        const alpha = (6 - ring) * 0.038;
+        const g = ctx!.createRadialGradient(cx, cy, 0, cx, cy, r);
+        g.addColorStop(0, `rgba(255,215,255,${alpha * 3})`);
+        g.addColorStop(0.4, `rgba(210,90,255,${alpha * 2})`);
+        g.addColorStop(1, "rgba(130,50,240,0)");
+        ctx!.beginPath();
+        ctx!.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx!.fillStyle = g;
+        ctx!.fill();
+      }
     }
-    pGeo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-    const pMat = new THREE.PointsMaterial({
-      color: 0xff66ff,
-      size: 0.015,
-      blending: THREE.AdditiveBlending,
-      transparent: true,
-    });
-    const particles = new THREE.Points(pGeo, pMat);
-    scene.add(particles);
 
-    // ---------------- LIGHT ----------------
-    const light = new THREE.PointLight(0xff00ff, 3, 10);
-    scene.add(light);
+    function updateParticles() {
+      particles.forEach((p) => {
+        p.angle += p.speed;
+        p.wobble += p.wobbleSpeed;
+        const wobR = p.r + Math.sin(p.wobble) * p.wobbleAmp;
+        p.x = cx + Math.cos(p.angle) * wobR;
+        p.y = cy + Math.sin(p.angle) * wobR;
+        p.currentAlpha =
+          p.alpha * (0.4 + 0.6 * Math.abs(Math.sin(p.wobble * 0.65)));
+      });
+    }
 
-    // ---------------- POSTPROCESSING ----------------
-    const composer = new EffectComposer(renderer);
-    composer.addPass(new RenderPass(scene, camera));
-    const bloom = new UnrealBloomPass(
-      new THREE.Vector2(width, height),
-      1.8,
-      0.4,
-      0.1
-    );
-    composer.addPass(bloom);
+    function drawParticles() {
+      particles.forEach((p) => {
+        const a = p.currentAlpha ?? p.alpha;
+        ctx!.beginPath();
+        ctx!.arc(p.x!, p.y!, p.size, 0, Math.PI * 2);
+        ctx!.fillStyle = p.color + a + ")";
+        ctx!.fill();
+        if (p.size > 1.1) {
+          const g = ctx!.createRadialGradient(
+            p.x!,
+            p.y!,
+            0,
+            p.x!,
+            p.y!,
+            p.size * 3
+          );
+          g.addColorStop(0, p.color + a * 0.35 + ")");
+          g.addColorStop(1, "rgba(0,0,0,0)");
+          ctx!.beginPath();
+          ctx!.arc(p.x!, p.y!, p.size * 3, 0, Math.PI * 2);
+          ctx!.fillStyle = g;
+          ctx!.fill();
+        }
+      });
+    }
 
-    // ---------------- ANIMATION ----------------
+    function spawnSpark() {
+      if (Math.random() < 0.22) {
+        const a = rand(0, Math.PI * 2);
+        const r = rand(50, 190);
+        sparks.push({
+          x: cx + Math.cos(a) * r,
+          y: cy + Math.sin(a) * r,
+          tx: cx + Math.cos(a + rand(-0.7, 0.7)) * (r + rand(25, 85)),
+          ty: cy + Math.sin(a + rand(-0.7, 0.7)) * (r + rand(25, 85)),
+          life: 1,
+          speed: rand(0.018, 0.045),
+        });
+      }
+    }
+
+    function drawSparks() {
+      for (let i = sparks.length - 1; i >= 0; i--) {
+        const s = sparks[i];
+        s.life -= s.speed;
+        if (s.life <= 0) {
+          sparks.splice(i, 1);
+          continue;
+        }
+        const prog = 1 - s.life;
+        const x = lerp(s.x, s.tx, prog);
+        const y = lerp(s.y, s.ty, prog);
+        ctx!.beginPath();
+        ctx!.moveTo(s.x, s.y);
+        ctx!.lineTo(x, y);
+        ctx!.strokeStyle = `rgba(195,140,255,${s.life * 0.75})`;
+        ctx!.lineWidth = 0.7;
+        ctx!.stroke();
+        ctx!.beginPath();
+        ctx!.arc(x, y, 1.2, 0, Math.PI * 2);
+        ctx!.fillStyle = `rgba(255,195,255,${s.life})`;
+        ctx!.fill();
+      }
+    }
+
     let frameId = 0;
-    const animate = (t: number) => {
-      frameId = requestAnimationFrame(animate);
-      const time = t * 0.001;
-      sphereMat.uniforms.time.value = time;
-      lineMaterial.uniforms.time.value = time;
-      sphere.rotation.y += 0.002;
-      particles.rotation.y += 0.0008;
-      controls.update();
-      composer.render();
+    const frame = () => {
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, W, H);
+      drawTendrils();
+      drawBrainLobe();
+      drawVeins();
+      updateParticles();
+      drawParticles();
+      spawnSpark();
+      drawSparks();
+      drawCore();
+      t += 0.016;
+      frameId = requestAnimationFrame(frame);
     };
-    frameId = requestAnimationFrame(animate);
+    frameId = requestAnimationFrame(frame);
 
-    // ---------------- RESIZE ----------------
-    const onResize = () => {
-      const w = mount.clientWidth;
-      const h = mount.clientHeight;
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
-      composer.setSize(w, h);
-    };
-    window.addEventListener("resize", onResize);
-
-    return () => {
-      cancelAnimationFrame(frameId);
-      window.removeEventListener("resize", onResize);
-      controls.dispose();
-      sphereGeo.dispose();
-      sphereMat.dispose();
-      lineMaterial.dispose();
-      lines.forEach((l) => l.geometry.dispose());
-      pGeo.dispose();
-      pMat.dispose();
-      composer.dispose();
-      renderer.dispose();
-      if (renderer.domElement.parentNode === mount) {
-        mount.removeChild(renderer.domElement);
-      }
-    };
+    return () => cancelAnimationFrame(frameId);
   }, []);
 
-  return <div ref={mountRef} className="fixed inset-0 h-screen w-screen bg-background" />;
+  return (
+    <div className="fixed inset-0 flex items-center justify-center bg-black">
+      <canvas ref={canvasRef} className="block w-full max-w-[800px]" />
+    </div>
+  );
 };
 
 export default NeuralCore;
