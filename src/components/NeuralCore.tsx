@@ -174,10 +174,13 @@ const NeuralCore = () => {
         ctx!.beginPath();
         for (let i = 0; i <= lobes * 5; i++) {
           const a = (i / lobes / 5) * Math.PI * 2;
+          // organic deformation via fBm noise around the ring
+          const nx = Math.cos(a) * 1.6;
+          const ny = Math.sin(a) * 1.6;
           const lobe =
             1 +
-            0.11 * Math.sin(lobes * a + t * 0.28) +
-            0.055 * Math.sin(lobes * 2 * a - t * 0.18);
+            0.13 * fbm(nx, ny, t * 0.18, 3) +
+            0.05 * noise3(nx * 3.5, ny * 3.5, t * 0.32);
           const r = 188 * scale * lobe;
           const x = cx + Math.cos(a) * r;
           const y = cy + Math.sin(a) * r;
