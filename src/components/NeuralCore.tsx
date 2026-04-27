@@ -101,7 +101,7 @@ const NeuralCore = () => {
       uColorB: { value: new THREE.Color("#ff3df0") }, // pink
       uColorC: { value: new THREE.Color("#ffffff") }, // white core
       uFresnelPower: { value: 2.2 },
-      uGlow: { value: 0.9 },
+      uGlow: { value: 0.6 },
     };
 
     // ---------- Inner core sphere (deformed, fresnel + gradient) ----------
@@ -149,16 +149,16 @@ const NeuralCore = () => {
         uniform float uGlow;
         void main(){
           float fres = pow(1.0 - max(dot(normalize(vNormalW), normalize(vViewDir)), 0.0), uFresnelPower);
-          float coreMask = smoothstep(0.9, 0.0, length(vPos));
+          float radius = length(vPos);
           float pulse = 0.6 + 0.4 * sin(uTime * 2.0) * uPulse;
-          // Edges = cool violet (uColorA). Pink (uColorB) only deep inside, white at very core.
-          vec3 edge = uColorA;
-          vec3 inner = mix(uColorB, uColorC, smoothstep(0.4, 0.0, length(vPos)));
-          vec3 grad = mix(edge, inner, coreMask);
-          // Fresnel adds violet rim, NOT pink. Inner brightness drives pink core.
-          vec3 col = edge * fres * 0.6 + inner * coreMask * (0.9 + 0.3 * pulse);
-          col *= uGlow;
-          float alpha = clamp(fres * 0.55 + coreMask * 0.75, 0.0, 1.0);
+          float shellMask = smoothstep(1.02, 0.72, radius);
+          float coreMask = 1.0 - smoothstep(0.0, 0.42, radius);
+          float filament = smoothstep(0.18, 0.72, abs(vDisp));
+          vec3 shell = uColorA * (fres * 0.5 + filament * 0.22) * shellMask;
+          vec3 inner = uColorB * shellMask * 0.18 * (0.7 + pulse * 0.3);
+          vec3 nucleus = mix(uColorB, uColorC, coreMask) * coreMask * (1.0 + pulse * 0.18);
+          vec3 col = (shell + inner + nucleus) * uGlow;
+          float alpha = clamp(fres * 0.22 + shellMask * 0.12 + coreMask * 0.34, 0.0, 0.58);
           gl_FragColor = vec4(col, alpha);
         }
       `,
@@ -181,12 +181,12 @@ const NeuralCore = () => {
         void main(){
           float r = length(vP);
           float pulse = 0.7 + 0.3 * sin(uTime*3.0);
-          float core = smoothstep(0.55, 0.0, r) * pulse;
+          float core = smoothstep(0.32, 0.0, r) * pulse;
           vec3 c = mix(uColorB, uColorC, smoothstep(0.4, 0.0, r));
-          gl_FragColor = vec4(c * core * 2.5, core);
+          gl_FragColor = vec4(c * core * 1.45, core * 0.55);
         }`,
     });
-    const nucleus = new THREE.Mesh(new THREE.SphereGeometry(0.55, 32, 32), nucleusMat);
+    const nucleus = new THREE.Mesh(new THREE.SphereGeometry(0.34, 32, 32), nucleusMat);
     scene.add(nucleus);
 
     // ---------- Neural connections (lines) ----------
