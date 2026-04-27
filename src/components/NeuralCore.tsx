@@ -383,7 +383,7 @@ const NeuralCore = () => {
     // ---------- Postprocessing ----------
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
-    const bloom = new UnrealBloomPass(new THREE.Vector2(width, height), 0.25, 0.4, 0.7);
+    const bloom = new UnrealBloomPass(new THREE.Vector2(width, height), 0.12, 0.25, 0.82);
     composer.addPass(bloom);
     const fxaa = new ShaderPass(FXAAShader);
     fxaa.material.uniforms["resolution"].value.set(1 / width, 1 / height);
@@ -397,8 +397,8 @@ const NeuralCore = () => {
     mount.appendChild(gui.domElement);
 
     const params = {
-      glow: 0.9,
-      bloom: 0.25,
+      glow: 0.6,
+      bloom: 0.12,
       pulse: 1.0,
       speed: 1.0,
       noise: 0.22,
