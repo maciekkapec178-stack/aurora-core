@@ -151,10 +151,14 @@ const NeuralCore = () => {
           float fres = pow(1.0 - max(dot(normalize(vNormalW), normalize(vViewDir)), 0.0), uFresnelPower);
           float coreMask = smoothstep(0.9, 0.0, length(vPos));
           float pulse = 0.6 + 0.4 * sin(uTime * 2.0) * uPulse;
-          vec3 grad = mix(uColorA, uColorB, smoothstep(-0.6, 0.6, vDisp));
-          grad = mix(grad, uColorC, coreMask * 0.85);
-          vec3 col = grad * (0.35 + fres * 1.6) * uGlow * (0.85 + 0.25 * pulse);
-          float alpha = clamp(fres * 0.9 + coreMask * 0.6, 0.0, 1.0);
+          // Edges = cool violet (uColorA). Pink (uColorB) only deep inside, white at very core.
+          vec3 edge = uColorA;
+          vec3 inner = mix(uColorB, uColorC, smoothstep(0.4, 0.0, length(vPos)));
+          vec3 grad = mix(edge, inner, coreMask);
+          // Fresnel adds violet rim, NOT pink. Inner brightness drives pink core.
+          vec3 col = edge * fres * 0.6 + inner * coreMask * (0.9 + 0.3 * pulse);
+          col *= uGlow;
+          float alpha = clamp(fres * 0.55 + coreMask * 0.75, 0.0, 1.0);
           gl_FragColor = vec4(col, alpha);
         }
       `,
@@ -376,7 +380,7 @@ const NeuralCore = () => {
     // ---------- Postprocessing ----------
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
-    const bloom = new UnrealBloomPass(new THREE.Vector2(width, height), 0.65, 0.6, 0.25);
+    const bloom = new UnrealBloomPass(new THREE.Vector2(width, height), 0.25, 0.4, 0.7);
     composer.addPass(bloom);
     const fxaa = new ShaderPass(FXAAShader);
     fxaa.material.uniforms["resolution"].value.set(1 / width, 1 / height);
@@ -391,7 +395,7 @@ const NeuralCore = () => {
 
     const params = {
       glow: 0.9,
-      bloom: 0.65,
+      bloom: 0.25,
       pulse: 1.0,
       speed: 1.0,
       noise: 0.22,
