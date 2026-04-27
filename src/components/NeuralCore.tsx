@@ -233,6 +233,7 @@ const NeuralCore = () => {
       transparent: true,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
+      depthTest: false,
       vertexShader: `
         attribute vec2 aLine; // x: t (0 or 1), y: seed
         varying float vT;
@@ -256,10 +257,10 @@ const NeuralCore = () => {
         void main(){
           float flow = fract(vT - uTime * (0.4 + vSeed * 0.6) + vSeed);
           float pulse = smoothstep(0.0, 0.15, flow) * smoothstep(1.0, 0.6, flow);
-          float base = 0.18;
+          float base = 0.3;
           vec3 col = mix(uColorA, uColorB, vSeed);
           float a = base + pulse * 0.9;
-          gl_FragColor = vec4(col * (0.6 + pulse * 1.8), a);
+          gl_FragColor = vec4(col * (0.8 + pulse * 1.6), a);
         }`,
     });
     const lines = new THREE.LineSegments(linesGeo, linesMat);
@@ -296,6 +297,7 @@ const NeuralCore = () => {
         transparent: true,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
+        depthTest: false,
         vertexShader: `
           varying float vT;
           void main(){
@@ -313,7 +315,7 @@ const NeuralCore = () => {
             float pulse = smoothstep(0.0, 0.2, flow) * smoothstep(1.0, 0.7, flow);
             float fade = smoothstep(1.0, 0.2, vT);
             vec3 c = mix(uColorA, uColorB, vT);
-            gl_FragColor = vec4(c * (0.4 + pulse * 2.5) * fade, (0.25 + pulse) * fade);
+            gl_FragColor = vec4(c * (0.3 + pulse * 1.8) * fade, (0.16 + pulse * 0.65) * fade);
           }`,
       });
       tendrilMats.push(mat);
@@ -343,6 +345,7 @@ const NeuralCore = () => {
       transparent: true,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
+      depthTest: false,
       vertexShader: `
         attribute float aSeed;
         varying float vSeed;
@@ -357,7 +360,7 @@ const NeuralCore = () => {
           p.y += sin(uTime * (0.5 + aSeed) + aSeed * 10.0) * 0.08;
           vec4 mv = modelViewMatrix * vec4(p,1.0);
           gl_Position = projectionMatrix * mv;
-          gl_PointSize = (1.0 + aSeed * 3.0) * (300.0 / -mv.z);
+          gl_PointSize = (0.55 + aSeed * 1.8) * (220.0 / -mv.z);
         }`,
       fragmentShader: `
         varying float vSeed;
@@ -371,7 +374,7 @@ const NeuralCore = () => {
           float glow = pow(1.0 - d * 2.0, 2.5);
           float pulse = 0.6 + 0.4 * sin(uTime * 3.0 + vSeed * 12.0);
           vec3 c = mix(uColorA, uColorB, vSeed);
-          gl_FragColor = vec4(c * glow * pulse * 1.6, glow);
+          gl_FragColor = vec4(c * glow * pulse * 0.95, glow * 0.45);
         }`,
     });
     const particles = new THREE.Points(partGeo, partMat);
