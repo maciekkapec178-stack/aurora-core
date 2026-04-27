@@ -101,7 +101,7 @@ const NeuralCore = () => {
       uColorB: { value: new THREE.Color("#ff3df0") }, // pink
       uColorC: { value: new THREE.Color("#ffffff") }, // white core
       uFresnelPower: { value: 2.2 },
-      uGlow: { value: 0.9 },
+      uGlow: { value: 0.6 },
     };
 
     // ---------- Inner core sphere (deformed, fresnel + gradient) ----------
@@ -149,16 +149,16 @@ const NeuralCore = () => {
         uniform float uGlow;
         void main(){
           float fres = pow(1.0 - max(dot(normalize(vNormalW), normalize(vViewDir)), 0.0), uFresnelPower);
-          float coreMask = smoothstep(0.9, 0.0, length(vPos));
+          float radius = length(vPos);
           float pulse = 0.6 + 0.4 * sin(uTime * 2.0) * uPulse;
-          // Edges = cool violet (uColorA). Pink (uColorB) only deep inside, white at very core.
-          vec3 edge = uColorA;
-          vec3 inner = mix(uColorB, uColorC, smoothstep(0.4, 0.0, length(vPos)));
-          vec3 grad = mix(edge, inner, coreMask);
-          // Fresnel adds violet rim, NOT pink. Inner brightness drives pink core.
-          vec3 col = edge * fres * 0.6 + inner * coreMask * (0.9 + 0.3 * pulse);
-          col *= uGlow;
-          float alpha = clamp(fres * 0.55 + coreMask * 0.75, 0.0, 1.0);
+          float shellMask = smoothstep(1.02, 0.72, radius);
+          float coreMask = 1.0 - smoothstep(0.0, 0.42, radius);
+          float filament = smoothstep(0.18, 0.72, abs(vDisp));
+          vec3 shell = uColorA * (fres * 0.5 + filament * 0.22) * shellMask;
+          vec3 inner = uColorB * shellMask * 0.18 * (0.7 + pulse * 0.3);
+          vec3 nucleus = mix(uColorB, uColorC, coreMask) * coreMask * (1.0 + pulse * 0.18);
+          vec3 col = (shell + inner + nucleus) * uGlow;
+          float alpha = clamp(fres * 0.22 + shellMask * 0.12 + coreMask * 0.34, 0.0, 0.58);
           gl_FragColor = vec4(col, alpha);
         }
       `,
@@ -181,12 +181,12 @@ const NeuralCore = () => {
         void main(){
           float r = length(vP);
           float pulse = 0.7 + 0.3 * sin(uTime*3.0);
-          float core = smoothstep(0.55, 0.0, r) * pulse;
+          float core = smoothstep(0.32, 0.0, r) * pulse;
           vec3 c = mix(uColorB, uColorC, smoothstep(0.4, 0.0, r));
-          gl_FragColor = vec4(c * core * 2.5, core);
+          gl_FragColor = vec4(c * core * 1.45, core * 0.55);
         }`,
     });
-    const nucleus = new THREE.Mesh(new THREE.SphereGeometry(0.55, 32, 32), nucleusMat);
+    const nucleus = new THREE.Mesh(new THREE.SphereGeometry(0.34, 32, 32), nucleusMat);
     scene.add(nucleus);
 
     // ---------- Neural connections (lines) ----------
@@ -233,6 +233,7 @@ const NeuralCore = () => {
       transparent: true,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
+      depthTest: false,
       vertexShader: `
         attribute vec2 aLine; // x: t (0 or 1), y: seed
         varying float vT;
@@ -256,10 +257,10 @@ const NeuralCore = () => {
         void main(){
           float flow = fract(vT - uTime * (0.4 + vSeed * 0.6) + vSeed);
           float pulse = smoothstep(0.0, 0.15, flow) * smoothstep(1.0, 0.6, flow);
-          float base = 0.18;
+          float base = 0.3;
           vec3 col = mix(uColorA, uColorB, vSeed);
           float a = base + pulse * 0.9;
-          gl_FragColor = vec4(col * (0.6 + pulse * 1.8), a);
+          gl_FragColor = vec4(col * (0.8 + pulse * 1.6), a);
         }`,
     });
     const lines = new THREE.LineSegments(linesGeo, linesMat);
@@ -296,6 +297,7 @@ const NeuralCore = () => {
         transparent: true,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
+        depthTest: false,
         vertexShader: `
           varying float vT;
           void main(){
@@ -313,7 +315,7 @@ const NeuralCore = () => {
             float pulse = smoothstep(0.0, 0.2, flow) * smoothstep(1.0, 0.7, flow);
             float fade = smoothstep(1.0, 0.2, vT);
             vec3 c = mix(uColorA, uColorB, vT);
-            gl_FragColor = vec4(c * (0.4 + pulse * 2.5) * fade, (0.25 + pulse) * fade);
+            gl_FragColor = vec4(c * (0.3 + pulse * 1.8) * fade, (0.16 + pulse * 0.65) * fade);
           }`,
       });
       tendrilMats.push(mat);
@@ -343,6 +345,7 @@ const NeuralCore = () => {
       transparent: true,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
+      depthTest: false,
       vertexShader: `
         attribute float aSeed;
         varying float vSeed;
@@ -357,7 +360,7 @@ const NeuralCore = () => {
           p.y += sin(uTime * (0.5 + aSeed) + aSeed * 10.0) * 0.08;
           vec4 mv = modelViewMatrix * vec4(p,1.0);
           gl_Position = projectionMatrix * mv;
-          gl_PointSize = (1.0 + aSeed * 3.0) * (300.0 / -mv.z);
+          gl_PointSize = (0.55 + aSeed * 1.8) * (220.0 / -mv.z);
         }`,
       fragmentShader: `
         varying float vSeed;
@@ -371,7 +374,7 @@ const NeuralCore = () => {
           float glow = pow(1.0 - d * 2.0, 2.5);
           float pulse = 0.6 + 0.4 * sin(uTime * 3.0 + vSeed * 12.0);
           vec3 c = mix(uColorA, uColorB, vSeed);
-          gl_FragColor = vec4(c * glow * pulse * 1.6, glow);
+          gl_FragColor = vec4(c * glow * pulse * 0.95, glow * 0.45);
         }`,
     });
     const particles = new THREE.Points(partGeo, partMat);
@@ -380,7 +383,7 @@ const NeuralCore = () => {
     // ---------- Postprocessing ----------
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
-    const bloom = new UnrealBloomPass(new THREE.Vector2(width, height), 0.25, 0.4, 0.7);
+    const bloom = new UnrealBloomPass(new THREE.Vector2(width, height), 0.12, 0.25, 0.82);
     composer.addPass(bloom);
     const fxaa = new ShaderPass(FXAAShader);
     fxaa.material.uniforms["resolution"].value.set(1 / width, 1 / height);
@@ -394,8 +397,8 @@ const NeuralCore = () => {
     mount.appendChild(gui.domElement);
 
     const params = {
-      glow: 0.9,
-      bloom: 0.25,
+      glow: 0.6,
+      bloom: 0.12,
       pulse: 1.0,
       speed: 1.0,
       noise: 0.22,
