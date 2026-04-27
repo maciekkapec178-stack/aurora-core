@@ -1,7 +1,39 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+
+type Settings = {
+  particleCount: number;
+  tendrilCount: number;
+  veinCount: number;
+  lobeAmp: number;
+  tendrilWaveAmp: number;
+  sparkRate: number;
+  coreSize: number;
+  glowAlpha: number;
+  speed: number;
+};
+
+const DEFAULTS: Settings = {
+  particleCount: 700,
+  tendrilCount: 16,
+  veinCount: 8,
+  lobeAmp: 0.13,
+  tendrilWaveAmp: 1.4,
+  sparkRate: 0.22,
+  coreSize: 1,
+  glowAlpha: 1,
+  speed: 1,
+};
 
 const NeuralCore = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [settings, setSettings] = useState<Settings>(DEFAULTS);
+  const settingsRef = useRef<Settings>(DEFAULTS);
+  const [showPanel, setShowPanel] = useState(true);
+
+  // keep ref in sync so the rAF loop always reads latest values
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -19,7 +51,7 @@ const NeuralCore = () => {
     const rand = (a: number, b: number) => Math.random() * (b - a) + a;
     const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-    // ---------------- 3D Simplex Noise (Stefan Gustavson, public domain) ----------------
+    // ---------------- 3D Simplex Noise ----------------
     const grad3 = [
       [1, 1, 0], [-1, 1, 0], [1, -1, 0], [-1, -1, 0],
       [1, 0, 1], [-1, 0, 1], [1, 0, -1], [-1, 0, -1],
@@ -88,7 +120,6 @@ const NeuralCore = () => {
       }
       return 32 * (n0 + n1 + n2 + n3);
     };
-    // fBm: octaves of noise for richer organic feel
     const fbm = (x: number, y: number, z: number, oct = 3) => {
       let amp = 1, freq = 1, sum = 0, norm = 0;
       for (let o = 0; o < oct; o++) {
@@ -101,144 +132,113 @@ const NeuralCore = () => {
     };
 
     type Particle = {
-      r: number;
-      angle: number;
-      speed: number;
-      size: number;
-      wobble: number;
-      wobbleSpeed: number;
-      wobbleAmp: number;
-      alpha: number;
-      color: string;
-      x?: number;
-      y?: number;
-      currentAlpha?: number;
+      r: number; angle: number; speed: number; size: number;
+      wobble: number; wobbleSpeed: number; wobbleAmp: number;
+      alpha: number; color: string;
+      x?: number; y?: number; currentAlpha?: number;
     };
     type Tendril = {
-      angle: number;
-      length: number;
+      angle: number; length: number;
       segments: { drift: number; phase: number }[];
-      width: number;
-      phase: number;
+      width: number; phase: number;
     };
     type Spark = {
-      x: number;
-      y: number;
-      tx: number;
-      ty: number;
-      life: number;
-      speed: number;
+      x: number; y: number; tx: number; ty: number; life: number; speed: number;
     };
 
+    // Pools sized to MAX so we can change count via slider without re-init
+    const MAX_PARTICLES = 1500;
+    const MAX_TENDRILS = 40;
     const particles: Particle[] = [];
     const tendrils: Tendril[] = [];
     const sparks: Spark[] = [];
     let t = 0;
 
-    for (let i = 0; i < 1100; i++) {
+    for (let i = 0; i < MAX_PARTICLES; i++) {
       particles.push({
-        r: rand(30, 210),
+        r: rand(40, 195),
         angle: rand(0, Math.PI * 2),
-        speed: rand(0.001, 0.008) * (Math.random() < 0.5 ? 1 : -1),
-        size: rand(0.3, 2.0),
+        speed: rand(0.001, 0.006),
+        size: rand(0.3, 1.6),
         wobble: rand(0, Math.PI * 2),
-        wobbleSpeed: rand(0.01, 0.06),
-        wobbleAmp: rand(5, 22),
+        wobbleSpeed: rand(0.01, 0.05),
+        wobbleAmp: rand(5, 18),
         alpha: rand(0.4, 1),
         color:
           Math.random() < 0.65
             ? `hsla(${rand(275, 330)},100%,72%,`
-            : `hsla(${rand(190, 245)},100%,72%,`,
+            : `hsla(${rand(195, 245)},100%,72%,`,
       });
     }
-
-    for (let i = 0; i < 28; i++) {
-      const angle = (i / 28) * Math.PI * 2 + rand(-0.08, 0.08);
+    for (let i = 0; i < MAX_TENDRILS; i++) {
+      const angle = (i / MAX_TENDRILS) * Math.PI * 2 + rand(-0.08, 0.08);
       tendrils.push({
         angle,
-        length: rand(220, 320),
-        segments: Array.from({ length: 22 }, () => ({
-          drift: rand(-26, 26),
+        length: rand(200, 290),
+        segments: Array.from({ length: 14 }, () => ({
+          drift: rand(-20, 20),
           phase: rand(0, Math.PI * 2),
         })),
-        width: rand(1.0, 3.4),
+        width: rand(1.2, 3.2),
         phase: rand(0, Math.PI * 2),
       });
     }
 
-    // breathing pulse for the whole organism
-    const breath = () => 1 + 0.04 * Math.sin(t * 1.4) + 0.02 * fbm(0, 0, t * 0.5, 2);
-
-    function drawAura() {
-      const br = breath();
-      const g = ctx!.createRadialGradient(cx, cy, 60, cx, cy, 320 * br);
-      g.addColorStop(0, "rgba(180,90,255,0.18)");
-      g.addColorStop(0.4, "rgba(120,60,220,0.08)");
-      g.addColorStop(1, "rgba(0,0,0,0)");
-      ctx!.fillStyle = g;
-      ctx!.fillRect(0, 0, W, H);
-    }
-
-    function drawBrainLobe() {
-      const br = breath();
-      for (let pass = 0; pass < 4; pass++) {
-        const alpha = [0.05, 0.09, 0.16, 0.22][pass];
-        const scale = [1.14, 1.08, 1.03, 1][pass] * br;
+    function drawBrainLobe(s: Settings) {
+      for (let pass = 0; pass < 3; pass++) {
+        const alpha = [0.05, 0.1, 0.18][pass] * s.glowAlpha;
+        const scale = [1.09, 1.04, 1][pass];
         ctx!.beginPath();
-        const steps = 180;
+        const steps = 90;
         for (let i = 0; i <= steps; i++) {
           const a = (i / steps) * Math.PI * 2;
-          // domain warping: noise of noise
-          const nx = Math.cos(a) * 1.7;
-          const ny = Math.sin(a) * 1.7;
-          const wx = nx + 0.6 * fbm(nx + 5.2, ny + 1.3, t * 0.18, 2);
-          const wy = ny + 0.6 * fbm(nx + 9.7, ny + 4.1, t * 0.18, 2);
+          const nx = Math.cos(a) * 1.6;
+          const ny = Math.sin(a) * 1.6;
           const lobe =
             1 +
-            0.18 * fbm(wx, wy, t * 0.22, 4) +
-            0.06 * noise3(nx * 4.0, ny * 4.0, t * 0.4);
-          const r = 192 * scale * lobe;
+            s.lobeAmp * fbm(nx, ny, t * 0.18, 3) +
+            (s.lobeAmp * 0.4) * noise3(nx * 3.5, ny * 3.5, t * 0.32);
+          const r = 188 * scale * lobe;
           const x = cx + Math.cos(a) * r;
           const y = cy + Math.sin(a) * r;
           i === 0 ? ctx!.moveTo(x, y) : ctx!.lineTo(x, y);
         }
         ctx!.closePath();
-        const g = ctx!.createRadialGradient(cx, cy, 20, cx, cy, 230);
-        g.addColorStop(0, `rgba(200,110,255,${alpha})`);
+        const g = ctx!.createRadialGradient(cx, cy, 20, cx, cy, 210);
+        g.addColorStop(0, `rgba(180,90,255,${alpha})`);
         g.addColorStop(0.5, `rgba(110,50,210,${alpha})`);
         g.addColorStop(1, `rgba(50,15,130,${alpha * 0.3})`);
         ctx!.fillStyle = g;
         ctx!.fill();
-        ctx!.strokeStyle = `rgba(180,90,255,${alpha * 1.7})`;
-        ctx!.lineWidth = pass === 3 ? 1.4 : 0.6;
+        ctx!.strokeStyle = `rgba(155,70,255,${alpha * 1.6})`;
+        ctx!.lineWidth = pass === 2 ? 1.1 : 0.5;
         ctx!.stroke();
       }
     }
 
-    function drawTendrils() {
-      tendrils.forEach((td) => {
+    function drawTendrils(s: Settings) {
+      const n = Math.min(s.tendrilCount, tendrils.length);
+      for (let k = 0; k < n; k++) {
+        const td = tendrils[k];
         const pts: [number, number][] = [];
         for (let i = 0; i < td.segments.length; i++) {
           const prog = i / (td.segments.length - 1);
-          const r = prog * td.length * breath();
+          const r = prog * td.length;
           const seed = td.segments[i].phase;
-          // domain-warped fBm for snake-like flow
-          const wxN = Math.cos(td.angle) * prog * 2.4 + seed;
-          const wyN = Math.sin(td.angle) * prog * 2.4 + seed;
-          const warp = fbm(wxN + 3.1, wyN - 2.7, t * 0.3, 2);
-          const nVal = fbm(wxN + warp, wyN + warp, t * 0.4, 3);
-          const wave = td.segments[i].drift * 1.8 * nVal;
+          const nVal = fbm(
+            Math.cos(td.angle) * prog * 2.2 + seed,
+            Math.sin(td.angle) * prog * 2.2 + seed,
+            t * 0.35,
+            2
+          );
+          const wave = td.segments[i].drift * s.tendrilWaveAmp * nVal;
           const perp = td.angle + Math.PI / 2;
-          const along = 10 * noise3(seed, prog * 3, t * 0.5);
+          const along = 6 * noise3(seed, prog * 3, t * 0.4);
           pts.push([
             cx + Math.cos(td.angle) * (r + along) + Math.cos(perp) * wave,
             cy + Math.sin(td.angle) * (r + along) + Math.sin(perp) * wave,
           ]);
         }
-        const last = pts[pts.length - 1];
-        const fade = 0.55 + 0.35 * Math.sin(t * 1.2 + td.phase);
-
-        // outer glow stroke
         ctx!.beginPath();
         ctx!.moveTo(pts[0][0], pts[0][1]);
         for (let i = 1; i < pts.length - 1; i++) {
@@ -246,215 +246,137 @@ const NeuralCore = () => {
           const my = (pts[i][1] + pts[i + 1][1]) / 2;
           ctx!.quadraticCurveTo(pts[i][0], pts[i][1], mx, my);
         }
-        const gGlow = ctx!.createLinearGradient(cx, cy, last[0], last[1]);
-        gGlow.addColorStop(0, `rgba(140,90,255,${fade * 0.35})`);
-        gGlow.addColorStop(1, "rgba(60,90,210,0)");
-        ctx!.strokeStyle = gGlow;
-        ctx!.lineWidth = td.width * 4;
-        ctx!.stroke();
-
-        // core stroke
-        ctx!.beginPath();
-        ctx!.moveTo(pts[0][0], pts[0][1]);
-        for (let i = 1; i < pts.length - 1; i++) {
-          const mx = (pts[i][0] + pts[i + 1][0]) / 2;
-          const my = (pts[i][1] + pts[i + 1][1]) / 2;
-          ctx!.quadraticCurveTo(pts[i][0], pts[i][1], mx, my);
-        }
-        const g = ctx!.createLinearGradient(cx, cy, last[0], last[1]);
-        g.addColorStop(0, `rgba(180,220,255,${fade})`);
-        g.addColorStop(0.5, `rgba(110,160,255,${fade * 0.7})`);
+        const fade = (0.45 + 0.3 * Math.sin(t * 1.1 + td.phase)) * s.glowAlpha;
+        const g = ctx!.createLinearGradient(
+          cx, cy, pts[pts.length - 1][0], pts[pts.length - 1][1]
+        );
+        g.addColorStop(0, `rgba(90,170,255,${fade})`);
+        g.addColorStop(0.5, `rgba(70,130,255,${fade * 0.55})`);
         g.addColorStop(1, "rgba(50,90,210,0)");
         ctx!.strokeStyle = g;
         ctx!.lineWidth = td.width;
         ctx!.stroke();
-
-        // bright tip
-        const tipPulse = 0.5 + 0.5 * Math.sin(t * 2.4 + td.phase);
-        const tg = ctx!.createRadialGradient(last[0], last[1], 0, last[0], last[1], 14);
-        tg.addColorStop(0, `rgba(220,200,255,${0.6 * tipPulse})`);
-        tg.addColorStop(1, "rgba(120,80,255,0)");
-        ctx!.fillStyle = tg;
-        ctx!.beginPath();
-        ctx!.arc(last[0], last[1], 14, 0, Math.PI * 2);
-        ctx!.fill();
-      });
+      }
     }
 
-    function drawVeins() {
-      for (let v = 0; v < 14; v++) {
-        const baseA = (v / 14) * Math.PI * 2 + t * 0.05;
+    function drawVeins(s: Settings) {
+      for (let v = 0; v < s.veinCount; v++) {
+        const a = (v / s.veinCount) * Math.PI * 2 + t * 0.045;
         ctx!.beginPath();
         ctx!.moveTo(cx, cy);
-        for (let i = 1; i <= 14; i++) {
-          const r = i * 15;
-          const wa =
-            baseA +
-            fbm(Math.cos(baseA) * 0.8, Math.sin(baseA) * 0.8 + i * 0.3, t * 0.4, 2) * 0.6;
+        for (let i = 1; i <= 9; i++) {
+          const r = i * 21;
+          const wa = a + Math.sin(t * 0.45 + v + i * 0.45) * 0.28;
           ctx!.lineTo(cx + Math.cos(wa) * r, cy + Math.sin(wa) * r);
         }
-        const pulse = 0.4 + 0.35 * Math.sin(t * 2.2 + v);
-        ctx!.strokeStyle = `rgba(120,200,255,${pulse})`;
-        ctx!.lineWidth = 1.2;
+        const pulse = (0.35 + 0.28 * Math.sin(t * 2 + v)) * s.glowAlpha;
+        ctx!.strokeStyle = `rgba(90,190,255,${pulse})`;
+        ctx!.lineWidth = 1.4;
         ctx!.stroke();
       }
     }
 
-    function drawCore() {
-      const br = breath();
-      // chromatic aberration: 3 offset cores
-      const offsets: [number, number, string][] = [
-        [-1.5, 0, "rgba(255,80,180,"],
-        [1.5, 0, "rgba(80,160,255,"],
-        [0, 0, "rgba(255,230,255,"],
-      ];
-      offsets.forEach(([ox, oy, col]) => {
-        for (let ring = 7; ring > 0; ring--) {
-          const r = (ring * 14 + 5 * Math.sin(t * 3 + ring)) * br;
-          const alpha = (8 - ring) * 0.04;
-          const g = ctx!.createRadialGradient(
-            cx + ox,
-            cy + oy,
-            0,
-            cx + ox,
-            cy + oy,
-            r
-          );
-          g.addColorStop(0, `${col}${alpha * 2.4})`);
-          g.addColorStop(0.5, `${col}${alpha * 1.2})`);
-          g.addColorStop(1, "rgba(0,0,0,0)");
-          ctx!.beginPath();
-          ctx!.arc(cx + ox, cy + oy, r, 0, Math.PI * 2);
-          ctx!.fillStyle = g;
-          ctx!.fill();
-        }
-      });
-      // hot center
-      const hot = ctx!.createRadialGradient(cx, cy, 0, cx, cy, 22 * br);
-      hot.addColorStop(0, "rgba(255,255,255,0.9)");
-      hot.addColorStop(0.4, "rgba(255,200,255,0.4)");
-      hot.addColorStop(1, "rgba(180,80,255,0)");
-      ctx!.fillStyle = hot;
-      ctx!.beginPath();
-      ctx!.arc(cx, cy, 22 * br, 0, Math.PI * 2);
-      ctx!.fill();
+    function drawCore(s: Settings) {
+      for (let ring = 5; ring > 0; ring--) {
+        const r = (ring * 13 + 4 * Math.sin(t * 3 + ring)) * s.coreSize;
+        const alpha = (6 - ring) * 0.038 * s.glowAlpha;
+        const g = ctx!.createRadialGradient(cx, cy, 0, cx, cy, r);
+        g.addColorStop(0, `rgba(255,215,255,${alpha * 3})`);
+        g.addColorStop(0.4, `rgba(210,90,255,${alpha * 2})`);
+        g.addColorStop(1, "rgba(130,50,240,0)");
+        ctx!.beginPath();
+        ctx!.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx!.fillStyle = g;
+        ctx!.fill();
+      }
     }
 
-    function updateParticles() {
-      particles.forEach((p) => {
-        p.angle += p.speed;
-        p.wobble += p.wobbleSpeed;
-        // noise-based radial breathing for each particle
-        const wobR =
-          p.r +
-          Math.sin(p.wobble) * p.wobbleAmp +
-          8 * noise3(Math.cos(p.angle) * 0.6, Math.sin(p.angle) * 0.6, t * 0.4);
+    function updateParticles(s: Settings) {
+      const n = Math.min(s.particleCount, particles.length);
+      for (let i = 0; i < n; i++) {
+        const p = particles[i];
+        p.angle += p.speed * s.speed;
+        p.wobble += p.wobbleSpeed * s.speed;
+        const wobR = p.r + Math.sin(p.wobble) * p.wobbleAmp;
         p.x = cx + Math.cos(p.angle) * wobR;
         p.y = cy + Math.sin(p.angle) * wobR;
         p.currentAlpha =
           p.alpha * (0.4 + 0.6 * Math.abs(Math.sin(p.wobble * 0.65)));
-      });
+      }
     }
 
-    function drawParticles() {
-      particles.forEach((p) => {
-        const a = p.currentAlpha ?? p.alpha;
+    function drawParticles(s: Settings) {
+      const n = Math.min(s.particleCount, particles.length);
+      for (let i = 0; i < n; i++) {
+        const p = particles[i];
+        const a = (p.currentAlpha ?? p.alpha) * s.glowAlpha;
         ctx!.beginPath();
         ctx!.arc(p.x!, p.y!, p.size, 0, Math.PI * 2);
         ctx!.fillStyle = p.color + a + ")";
         ctx!.fill();
-        if (p.size > 1.0) {
-          const g = ctx!.createRadialGradient(
-            p.x!,
-            p.y!,
-            0,
-            p.x!,
-            p.y!,
-            p.size * 4
-          );
-          g.addColorStop(0, p.color + a * 0.45 + ")");
+        if (p.size > 1.1) {
+          const g = ctx!.createRadialGradient(p.x!, p.y!, 0, p.x!, p.y!, p.size * 3);
+          g.addColorStop(0, p.color + a * 0.35 + ")");
           g.addColorStop(1, "rgba(0,0,0,0)");
           ctx!.beginPath();
-          ctx!.arc(p.x!, p.y!, p.size * 4, 0, Math.PI * 2);
+          ctx!.arc(p.x!, p.y!, p.size * 3, 0, Math.PI * 2);
           ctx!.fillStyle = g;
           ctx!.fill();
-        }
-      });
-    }
-
-    function spawnSpark() {
-      const count = Math.random() < 0.4 ? 2 : 1;
-      for (let n = 0; n < count; n++) {
-        if (Math.random() < 0.45) {
-          const a = rand(0, Math.PI * 2);
-          const r = rand(40, 200);
-          sparks.push({
-            x: cx + Math.cos(a) * r,
-            y: cy + Math.sin(a) * r,
-            tx: cx + Math.cos(a + rand(-0.9, 0.9)) * (r + rand(30, 110)),
-            ty: cy + Math.sin(a + rand(-0.9, 0.9)) * (r + rand(30, 110)),
-            life: 1,
-            speed: rand(0.018, 0.05),
-          });
         }
       }
     }
 
-    function drawSparks() {
+    function spawnSpark(s: Settings) {
+      if (Math.random() < s.sparkRate) {
+        const a = rand(0, Math.PI * 2);
+        const r = rand(50, 190);
+        sparks.push({
+          x: cx + Math.cos(a) * r,
+          y: cy + Math.sin(a) * r,
+          tx: cx + Math.cos(a + rand(-0.7, 0.7)) * (r + rand(25, 85)),
+          ty: cy + Math.sin(a + rand(-0.7, 0.7)) * (r + rand(25, 85)),
+          life: 1,
+          speed: rand(0.018, 0.045),
+        });
+      }
+    }
+
+    function drawSparks(s: Settings) {
       for (let i = sparks.length - 1; i >= 0; i--) {
-        const s = sparks[i];
-        s.life -= s.speed;
-        if (s.life <= 0) {
-          sparks.splice(i, 1);
-          continue;
-        }
-        const prog = 1 - s.life;
-        const x = lerp(s.x, s.tx, prog);
-        const y = lerp(s.y, s.ty, prog);
-        // glow line
+        const sp = sparks[i];
+        sp.life -= sp.speed * s.speed;
+        if (sp.life <= 0) { sparks.splice(i, 1); continue; }
+        const prog = 1 - sp.life;
+        const x = lerp(sp.x, sp.tx, prog);
+        const y = lerp(sp.y, sp.ty, prog);
         ctx!.beginPath();
-        ctx!.moveTo(s.x, s.y);
+        ctx!.moveTo(sp.x, sp.y);
         ctx!.lineTo(x, y);
-        ctx!.strokeStyle = `rgba(220,170,255,${s.life * 0.55})`;
-        ctx!.lineWidth = 2.4;
+        ctx!.strokeStyle = `rgba(195,140,255,${sp.life * 0.75 * s.glowAlpha})`;
+        ctx!.lineWidth = 0.7;
         ctx!.stroke();
-        // core line
         ctx!.beginPath();
-        ctx!.moveTo(s.x, s.y);
-        ctx!.lineTo(x, y);
-        ctx!.strokeStyle = `rgba(255,230,255,${s.life})`;
-        ctx!.lineWidth = 0.8;
-        ctx!.stroke();
-        // head halo
-        const hg = ctx!.createRadialGradient(x, y, 0, x, y, 6);
-        hg.addColorStop(0, `rgba(255,230,255,${s.life})`);
-        hg.addColorStop(1, "rgba(255,150,255,0)");
-        ctx!.fillStyle = hg;
-        ctx!.beginPath();
-        ctx!.arc(x, y, 6, 0, Math.PI * 2);
+        ctx!.arc(x, y, 1.2, 0, Math.PI * 2);
+        ctx!.fillStyle = `rgba(255,195,255,${sp.life * s.glowAlpha})`;
         ctx!.fill();
       }
     }
 
     let frameId = 0;
     const frame = () => {
-      // motion-blur trail instead of hard clear
-      ctx.fillStyle = "rgba(0,0,0,0.25)";
+      const s = settingsRef.current;
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = "#000";
       ctx.fillRect(0, 0, W, H);
-
-      ctx.globalCompositeOperation = "lighter";
-      drawAura();
-      drawTendrils();
-      drawBrainLobe();
-      drawVeins();
-      updateParticles();
-      drawParticles();
-      spawnSpark();
-      drawSparks();
-      drawCore();
-      ctx.globalCompositeOperation = "source-over";
-
-      t += 0.016;
+      drawTendrils(s);
+      drawBrainLobe(s);
+      drawVeins(s);
+      updateParticles(s);
+      drawParticles(s);
+      spawnSpark(s);
+      drawSparks(s);
+      drawCore(s);
+      t += 0.016 * s.speed;
       frameId = requestAnimationFrame(frame);
     };
     frameId = requestAnimationFrame(frame);
@@ -462,9 +384,64 @@ const NeuralCore = () => {
     return () => cancelAnimationFrame(frameId);
   }, []);
 
+  const set = <K extends keyof Settings>(k: K, v: Settings[K]) =>
+    setSettings((prev) => ({ ...prev, [k]: v }));
+
+  const Slider = ({
+    label, k, min, max, step,
+  }: {
+    label: string; k: keyof Settings; min: number; max: number; step: number;
+  }) => (
+    <label className="flex flex-col gap-1 text-xs text-white/80">
+      <div className="flex justify-between font-mono">
+        <span>{label}</span>
+        <span className="text-white/50">{Number(settings[k]).toFixed(step < 1 ? 2 : 0)}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={settings[k]}
+        onChange={(e) => set(k, Number(e.target.value) as Settings[typeof k])}
+        className="w-full accent-fuchsia-400"
+      />
+    </label>
+  );
+
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black">
       <canvas ref={canvasRef} className="block w-full max-w-[800px]" />
+
+      <button
+        onClick={() => setShowPanel((v) => !v)}
+        className="absolute top-4 right-4 rounded-md border border-white/20 bg-white/5 px-3 py-1.5 text-xs uppercase tracking-widest text-white/80 backdrop-blur hover:bg-white/10"
+      >
+        {showPanel ? "Hide" : "Controls"}
+      </button>
+
+      {showPanel && (
+        <div className="absolute top-16 right-4 w-64 space-y-3 rounded-lg border border-white/10 bg-black/60 p-4 backdrop-blur">
+          <div className="text-xs font-semibold uppercase tracking-widest text-fuchsia-300">
+            Neural Controls
+          </div>
+          <Slider label="Particles" k="particleCount" min={0} max={1500} step={50} />
+          <Slider label="Tendrils" k="tendrilCount" min={0} max={40} step={1} />
+          <Slider label="Veins" k="veinCount" min={0} max={20} step={1} />
+          <Slider label="Lobe deform" k="lobeAmp" min={0} max={0.5} step={0.01} />
+          <Slider label="Tendril wave" k="tendrilWaveAmp" min={0} max={4} step={0.1} />
+          <Slider label="Sparks rate" k="sparkRate" min={0} max={1} step={0.02} />
+          <Slider label="Core size" k="coreSize" min={0.3} max={3} step={0.05} />
+          <Slider label="Glow" k="glowAlpha" min={0} max={2} step={0.05} />
+          <Slider label="Speed" k="speed" min={0} max={3} step={0.05} />
+          <button
+            onClick={() => setSettings(DEFAULTS)}
+            className="w-full rounded-md border border-white/15 bg-white/5 px-2 py-1 text-xs uppercase tracking-widest text-white/70 hover:bg-white/10"
+          >
+            Reset
+          </button>
+        </div>
+      )}
     </div>
   );
 };
