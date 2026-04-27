@@ -101,7 +101,7 @@ const NeuralCore = () => {
       uColorB: { value: new THREE.Color("#ff3df0") }, // pink
       uColorC: { value: new THREE.Color("#ffffff") }, // white core
       uFresnelPower: { value: 2.2 },
-      uGlow: { value: 1.6 },
+      uGlow: { value: 0.9 },
     };
 
     // ---------- Inner core sphere (deformed, fresnel + gradient) ----------
@@ -376,7 +376,7 @@ const NeuralCore = () => {
     // ---------- Postprocessing ----------
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
-    const bloom = new UnrealBloomPass(new THREE.Vector2(width, height), 1.4, 0.85, 0.0);
+    const bloom = new UnrealBloomPass(new THREE.Vector2(width, height), 0.65, 0.6, 0.25);
     composer.addPass(bloom);
     const fxaa = new ShaderPass(FXAAShader);
     fxaa.material.uniforms["resolution"].value.set(1 / width, 1 / height);
@@ -390,8 +390,8 @@ const NeuralCore = () => {
     mount.appendChild(gui.domElement);
 
     const params = {
-      glow: 1.6,
-      bloom: 1.4,
+      glow: 0.9,
+      bloom: 0.65,
       pulse: 1.0,
       speed: 1.0,
       noise: 0.22,
