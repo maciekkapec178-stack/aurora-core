@@ -205,13 +205,21 @@ const NeuralCore = () => {
         for (let i = 0; i < td.segments.length; i++) {
           const prog = i / (td.segments.length - 1);
           const r = prog * td.length;
-          const wave =
-            td.segments[i].drift *
-            Math.sin(t * 0.75 + td.phase + td.segments[i].phase);
+          // organic per-segment drift driven by fBm
+          const seed = td.segments[i].phase;
+          const nVal = fbm(
+            Math.cos(td.angle) * prog * 2.2 + seed,
+            Math.sin(td.angle) * prog * 2.2 + seed,
+            t * 0.35,
+            2
+          );
+          const wave = td.segments[i].drift * 1.4 * nVal;
           const perp = td.angle + Math.PI / 2;
+          // also nudge along the tendril direction for snake-like motion
+          const along = 6 * noise3(seed, prog * 3, t * 0.4);
           pts.push([
-            cx + Math.cos(td.angle) * r + Math.cos(perp) * wave,
-            cy + Math.sin(td.angle) * r + Math.sin(perp) * wave,
+            cx + Math.cos(td.angle) * (r + along) + Math.cos(perp) * wave,
+            cy + Math.sin(td.angle) * (r + along) + Math.sin(perp) * wave,
           ]);
         }
         ctx!.beginPath();
