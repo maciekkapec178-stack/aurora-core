@@ -144,6 +144,7 @@ const NeuralCore = () => {
     };
     type Spark = {
       x: number; y: number; tx: number; ty: number; life: number; speed: number;
+      bolt?: boolean; seed?: number; segs?: number;
     };
 
     // Pools sized to MAX so we can change count via slider without re-init
