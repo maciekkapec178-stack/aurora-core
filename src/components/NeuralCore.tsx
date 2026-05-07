@@ -385,20 +385,20 @@ const NeuralCore = () => {
               sp.y + dy * u + py * jitter,
             ]);
           }
-          // outer glow pass
+          // outer glow pass (blue)
           ctx!.beginPath();
           ctx!.moveTo(pts[0][0], pts[0][1]);
           for (let k = 1; k < pts.length; k++) ctx!.lineTo(pts[k][0], pts[k][1]);
-          ctx!.strokeStyle = `rgba(170,120,255,${sp.life * 0.35 * s.glowAlpha})`;
+          ctx!.strokeStyle = `rgba(70,140,255,${sp.life * 0.35 * s.glowAlpha})`;
           ctx!.lineWidth = 4;
-          ctx!.shadowBlur = 16;
-          ctx!.shadowColor = "rgba(180,120,255,0.9)";
+          ctx!.shadowBlur = 14;
+          ctx!.shadowColor = "rgba(80,150,255,0.9)";
           ctx!.stroke();
-          // bright core
+          // bright core (light blue/white)
           ctx!.beginPath();
           ctx!.moveTo(pts[0][0], pts[0][1]);
           for (let k = 1; k < pts.length; k++) ctx!.lineTo(pts[k][0], pts[k][1]);
-          ctx!.strokeStyle = `rgba(245,225,255,${sp.life * 0.95 * s.glowAlpha})`;
+          ctx!.strokeStyle = `rgba(200,225,255,${sp.life * 0.95 * s.glowAlpha})`;
           ctx!.lineWidth = 1.1;
           ctx!.stroke();
           ctx!.shadowBlur = 0;
@@ -406,7 +406,7 @@ const NeuralCore = () => {
           // tip flash
           ctx!.beginPath();
           ctx!.arc(headX, headY, 2 + 2 * sp.life, 0, Math.PI * 2);
-          ctx!.fillStyle = `rgba(255,220,255,${sp.life * s.glowAlpha})`;
+          ctx!.fillStyle = `rgba(210,235,255,${sp.life * s.glowAlpha})`;
           ctx!.fill();
         } else {
           ctx!.beginPath();
