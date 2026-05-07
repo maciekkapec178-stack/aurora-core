@@ -336,22 +336,21 @@ const NeuralCore = () => {
     }
 
     function spawnSpark(s: Settings) {
-      // lower frequency: scale down and gate
-      if (Math.random() < s.sparkRate * 0.15) {
-        const a = rand(0, Math.PI * 2);
-        const r = rand(170, 200);
-        const reach = rand(120, 260); // far beyond the ring (200)
-        const spread = rand(-0.35, 0.35);
+      // rare: pick an existing tendril and shoot a long blue bolt along its direction, far past the ring
+      if (Math.random() < s.sparkRate * 0.12) {
+        const td = tendrils[Math.floor(Math.random() * Math.min(s.tendrilCount, tendrils.length))];
+        const a = td ? td.angle + rand(-0.05, 0.05) : rand(0, Math.PI * 2);
+        const reach = rand(280, 460); // well beyond the ring (200)
         sparks.push({
-          x: cx + Math.cos(a) * r,
-          y: cy + Math.sin(a) * r,
-          tx: cx + Math.cos(a + spread) * (r + reach),
-          ty: cy + Math.sin(a + spread) * (r + reach),
+          x: cx,
+          y: cy,
+          tx: cx + Math.cos(a) * reach,
+          ty: cy + Math.sin(a) * reach,
           life: 1,
-          speed: rand(0.012, 0.03),
+          speed: rand(0.012, 0.028),
           bolt: true,
           seed: Math.random() * 1000,
-          segs: 8 + Math.floor(Math.random() * 6),
+          segs: 14 + Math.floor(Math.random() * 8),
         });
       }
     }
@@ -386,20 +385,20 @@ const NeuralCore = () => {
               sp.y + dy * u + py * jitter,
             ]);
           }
-          // outer glow pass
+          // outer glow pass (blue)
           ctx!.beginPath();
           ctx!.moveTo(pts[0][0], pts[0][1]);
           for (let k = 1; k < pts.length; k++) ctx!.lineTo(pts[k][0], pts[k][1]);
-          ctx!.strokeStyle = `rgba(170,120,255,${sp.life * 0.35 * s.glowAlpha})`;
+          ctx!.strokeStyle = `rgba(70,140,255,${sp.life * 0.35 * s.glowAlpha})`;
           ctx!.lineWidth = 4;
-          ctx!.shadowBlur = 16;
-          ctx!.shadowColor = "rgba(180,120,255,0.9)";
+          ctx!.shadowBlur = 14;
+          ctx!.shadowColor = "rgba(80,150,255,0.9)";
           ctx!.stroke();
-          // bright core
+          // bright core (light blue/white)
           ctx!.beginPath();
           ctx!.moveTo(pts[0][0], pts[0][1]);
           for (let k = 1; k < pts.length; k++) ctx!.lineTo(pts[k][0], pts[k][1]);
-          ctx!.strokeStyle = `rgba(245,225,255,${sp.life * 0.95 * s.glowAlpha})`;
+          ctx!.strokeStyle = `rgba(200,225,255,${sp.life * 0.95 * s.glowAlpha})`;
           ctx!.lineWidth = 1.1;
           ctx!.stroke();
           ctx!.shadowBlur = 0;
@@ -407,7 +406,7 @@ const NeuralCore = () => {
           // tip flash
           ctx!.beginPath();
           ctx!.arc(headX, headY, 2 + 2 * sp.life, 0, Math.PI * 2);
-          ctx!.fillStyle = `rgba(255,220,255,${sp.life * s.glowAlpha})`;
+          ctx!.fillStyle = `rgba(210,235,255,${sp.life * s.glowAlpha})`;
           ctx!.fill();
         } else {
           ctx!.beginPath();
