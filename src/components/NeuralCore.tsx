@@ -184,6 +184,36 @@ const NeuralCore = () => {
       });
     }
 
+    function drawBorderRing(s: Settings) {
+      const baseR = 200;
+      // outer soft halo
+      const halo = ctx!.createRadialGradient(cx, cy, baseR * 0.85, cx, cy, baseR * 1.25);
+      halo.addColorStop(0, `rgba(160,90,255,${0.18 * s.glowAlpha})`);
+      halo.addColorStop(1, "rgba(0,0,0,0)");
+      ctx!.fillStyle = halo;
+      ctx!.beginPath();
+      ctx!.arc(cx, cy, baseR * 1.25, 0, Math.PI * 2);
+      ctx!.fill();
+
+      // outer thin ring
+      ctx!.beginPath();
+      ctx!.arc(cx, cy, baseR + 6, 0, Math.PI * 2);
+      ctx!.strokeStyle = `rgba(120,180,255,${0.25 * s.glowAlpha})`;
+      ctx!.lineWidth = 1;
+      ctx!.stroke();
+
+      // main bright ring with subtle pulse
+      const pulse = 0.65 + 0.25 * Math.sin(t * 1.3);
+      ctx!.beginPath();
+      ctx!.arc(cx, cy, baseR, 0, Math.PI * 2);
+      ctx!.strokeStyle = `rgba(190,130,255,${pulse * s.glowAlpha})`;
+      ctx!.lineWidth = 1.6;
+      ctx!.shadowBlur = 18;
+      ctx!.shadowColor = "rgba(180,90,255,0.9)";
+      ctx!.stroke();
+      ctx!.shadowBlur = 0;
+    }
+
     function drawBrainLobe(s: Settings) {
       for (let pass = 0; pass < 3; pass++) {
         const alpha = [0.05, 0.1, 0.18][pass] * s.glowAlpha;
@@ -370,6 +400,7 @@ const NeuralCore = () => {
       ctx.fillRect(0, 0, W, H);
       drawTendrils(s);
       drawBrainLobe(s);
+      drawBorderRing(s);
       drawVeins(s);
       updateParticles(s);
       drawParticles(s);
