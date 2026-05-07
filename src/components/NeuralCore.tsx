@@ -348,7 +348,10 @@ const NeuralCore = () => {
           tx: cx + Math.cos(a + spread) * (r + reach),
           ty: cy + Math.sin(a + spread) * (r + reach),
           life: 1,
-          speed: rand(0.018, 0.045),
+          speed: rand(0.012, 0.03),
+          bolt: true,
+          seed: Math.random() * 1000,
+          segs: 8 + Math.floor(Math.random() * 6),
         });
       }
     }
