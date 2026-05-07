@@ -400,6 +400,7 @@ const NeuralCore = () => {
       ctx.fillRect(0, 0, W, H);
       drawTendrils(s);
       drawBrainLobe(s);
+      drawBorderRing(s);
       drawVeins(s);
       updateParticles(s);
       drawParticles(s);
