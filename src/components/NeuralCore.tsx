@@ -335,14 +335,17 @@ const NeuralCore = () => {
     }
 
     function spawnSpark(s: Settings) {
-      if (Math.random() < s.sparkRate) {
+      // lower frequency: scale down and gate
+      if (Math.random() < s.sparkRate * 0.15) {
         const a = rand(0, Math.PI * 2);
-        const r = rand(50, 190);
+        const r = rand(170, 200);
+        const reach = rand(120, 260); // far beyond the ring (200)
+        const spread = rand(-0.35, 0.35);
         sparks.push({
           x: cx + Math.cos(a) * r,
           y: cy + Math.sin(a) * r,
-          tx: cx + Math.cos(a + rand(-0.7, 0.7)) * (r + rand(25, 85)),
-          ty: cy + Math.sin(a + rand(-0.7, 0.7)) * (r + rand(25, 85)),
+          tx: cx + Math.cos(a + spread) * (r + reach),
+          ty: cy + Math.sin(a + spread) * (r + reach),
           life: 1,
           speed: rand(0.018, 0.045),
         });
