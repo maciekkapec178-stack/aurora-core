@@ -175,7 +175,7 @@ const NeuralCore = () => {
       const angle = (i / MAX_TENDRILS) * Math.PI * 2 + rand(-0.08, 0.08);
       tendrils.push({
         angle,
-        length: rand(200, 290),
+        length: rand(360, 480),
         segments: Array.from({ length: 14 }, () => ({
           drift: rand(-20, 20),
           phase: rand(0, Math.PI * 2),
