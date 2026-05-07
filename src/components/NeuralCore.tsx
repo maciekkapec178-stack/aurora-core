@@ -362,18 +362,61 @@ const NeuralCore = () => {
         sp.life -= sp.speed * s.speed;
         if (sp.life <= 0) { sparks.splice(i, 1); continue; }
         const prog = 1 - sp.life;
-        const x = lerp(sp.x, sp.tx, prog);
-        const y = lerp(sp.y, sp.ty, prog);
-        ctx!.beginPath();
-        ctx!.moveTo(sp.x, sp.y);
-        ctx!.lineTo(x, y);
-        ctx!.strokeStyle = `rgba(195,140,255,${sp.life * 0.75 * s.glowAlpha})`;
-        ctx!.lineWidth = 0.7;
-        ctx!.stroke();
-        ctx!.beginPath();
-        ctx!.arc(x, y, 1.2, 0, Math.PI * 2);
-        ctx!.fillStyle = `rgba(255,195,255,${sp.life * s.glowAlpha})`;
-        ctx!.fill();
+        const headX = lerp(sp.x, sp.tx, prog);
+        const headY = lerp(sp.y, sp.ty, prog);
+
+        if (sp.bolt) {
+          // jagged lightning from origin to current head
+          const segs = sp.segs ?? 10;
+          const dx = headX - sp.x;
+          const dy = headY - sp.y;
+          const len = Math.hypot(dx, dy) || 1;
+          const px = -dy / len;
+          const py = dx / len;
+          const seed = sp.seed ?? 0;
+          const pts: [number, number][] = [];
+          for (let k = 0; k <= segs; k++) {
+            const u = k / segs;
+            // taper jitter near endpoints
+            const taper = Math.sin(u * Math.PI);
+            const jitter =
+              noise3(seed + u * 6, seed * 0.3, t * 4) * 18 * taper;
+            pts.push([
+              sp.x + dx * u + px * jitter,
+              sp.y + dy * u + py * jitter,
+            ]);
+          }
+          // outer glow pass
+          ctx!.beginPath();
+          ctx!.moveTo(pts[0][0], pts[0][1]);
+          for (let k = 1; k < pts.length; k++) ctx!.lineTo(pts[k][0], pts[k][1]);
+          ctx!.strokeStyle = `rgba(170,120,255,${sp.life * 0.35 * s.glowAlpha})`;
+          ctx!.lineWidth = 4;
+          ctx!.shadowBlur = 16;
+          ctx!.shadowColor = "rgba(180,120,255,0.9)";
+          ctx!.stroke();
+          // bright core
+          ctx!.beginPath();
+          ctx!.moveTo(pts[0][0], pts[0][1]);
+          for (let k = 1; k < pts.length; k++) ctx!.lineTo(pts[k][0], pts[k][1]);
+          ctx!.strokeStyle = `rgba(245,225,255,${sp.life * 0.95 * s.glowAlpha})`;
+          ctx!.lineWidth = 1.1;
+          ctx!.stroke();
+          ctx!.shadowBlur = 0;
+
+          // tip flash
+          ctx!.beginPath();
+          ctx!.arc(headX, headY, 2 + 2 * sp.life, 0, Math.PI * 2);
+          ctx!.fillStyle = `rgba(255,220,255,${sp.life * s.glowAlpha})`;
+          ctx!.fill();
+        } else {
+          ctx!.beginPath();
+          ctx!.moveTo(sp.x, sp.y);
+          ctx!.lineTo(headX, headY);
+          ctx!.strokeStyle = `rgba(195,140,255,${sp.life * 0.75 * s.glowAlpha})`;
+          ctx!.lineWidth = 0.7;
+          ctx!.stroke();
+        }
       }
     }
 
