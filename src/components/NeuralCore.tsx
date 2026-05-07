@@ -175,7 +175,7 @@ const NeuralCore = () => {
       const angle = (i / MAX_TENDRILS) * Math.PI * 2 + rand(-0.08, 0.08);
       tendrils.push({
         angle,
-        length: rand(200, 290),
+        length: rand(360, 480),
         segments: Array.from({ length: 14 }, () => ({
           drift: rand(-20, 20),
           phase: rand(0, Math.PI * 2),
@@ -335,24 +335,8 @@ const NeuralCore = () => {
       }
     }
 
-    function spawnSpark(s: Settings) {
-      // rare: pick an existing tendril and shoot a long blue bolt along its direction, far past the ring
-      if (Math.random() < s.sparkRate * 0.12) {
-        const td = tendrils[Math.floor(Math.random() * Math.min(s.tendrilCount, tendrils.length))];
-        const a = td ? td.angle + rand(-0.05, 0.05) : rand(0, Math.PI * 2);
-        const reach = rand(280, 460); // well beyond the ring (200)
-        sparks.push({
-          x: cx,
-          y: cy,
-          tx: cx + Math.cos(a) * reach,
-          ty: cy + Math.sin(a) * reach,
-          life: 1,
-          speed: rand(0.012, 0.028),
-          bolt: true,
-          seed: Math.random() * 1000,
-          segs: 14 + Math.floor(Math.random() * 8),
-        });
-      }
+    function spawnSpark(_s: Settings) {
+      // disabled — tendrils are extended instead
     }
 
     function drawSparks(s: Settings) {
